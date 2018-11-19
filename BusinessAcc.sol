@@ -1,8 +1,9 @@
 pragma solidity ^0.4.24;
 
+import "./contracts/ownership/Ownable.sol";
 import "./AegisEconomyCoin.sol";
 
-contract BusinessAcc {
+contract BusinessAcc is Ownable{
 
  	AegisEconomyCoin public aegisCoin;
 
@@ -18,29 +19,43 @@ contract BusinessAcc {
 	{
 			require(_address != address(0));
 			aegisCoin = _address;
-			aegisCoin.setBusinessAcc(address(this));
-			// add coin address to use methods such as only admin and other related to admin
+			aegisCoin.setBusinessAcc(address(this));	
 	}	
+
+
+	/// @notice Function to set business funds to any address
+	function setBusinessAccountForAegisCoin() 
+	onlyOwner
+	public
+	{
+			aegisCoin.setBusinessAcc(address(this));
+	}
+
 
 	/// @notice Function to transfer business funds to any address
 	/// @param _receiver Receiver's address
 	/// @param _value Amount of tokens to be sent
 	function transferTokens(address _receiver, uint256 _value) 
-	// onlyAdmin 
+	onlyAdmin 
 	public 
 	{
-			// approval required
-			// as approval request should be from the owner of the funds. 
-			// approval(_spender, _value) {}
-			// Possible solution to override approval function with three params - _owner, _spender, _value
-			aegisCoin.transferFrom(address(this), _receiver, _value);
+			aegisCoin.transfer(_receiver, _value);
 	}
+
+
+	// NO MORE REQUIRED
+	// // TODO: function set approval that will be called by api every time funds are received so that
+	// //       admin can make transferFrom calls easily
+	// function setApprovalForFunds()
+	// public
+	// {
+	//         uint256 currentTokenBalance = aegisCoin.balanceOf(address(this));
+	// 		aegisCoin.approve(address(aegisCoin), currentTokenBalance);
+	// }
+
 
 	// ========================= Getter Methods ===============================
 
-	/* 
-	 * TBD: Required?
-	 */
 
 	/// @notice Function to fetch the current token balance
 	/// @return _currentTokenBalance of business contract
@@ -52,6 +67,15 @@ contract BusinessAcc {
 	        _currentTokenBalance = aegisCoin.balanceOf(address(this));
 	        return;
     }
+
+
+    // function getAllowance(address _owner, address _spender) 
+    // public 
+    // view 
+    // returns (uint256) 
+    // {
+	   //      return aegisCoin.allowance(_owner, _spender);
+    // }
 
     // TODO: Maintain History
 }
