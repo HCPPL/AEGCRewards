@@ -17,7 +17,7 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     string  public  constant    name = "Aegis Economy Coin";
     string  public  constant    symbol = "AGEC";
     uint256 public  constant    decimals = 18;
-    uint256 private constant    initialSupply = 50*(10**6)* (10**18);    // 50 million mintTokens //1500000 * (10**5);
+    uint256 private constant    initialSupply =  50*(10**6)* (10**18);    // 50 million Tokens //1500000 * (10**5);
     uint256 public              supplyPerDay;
 
     uint256 private             inflationPeriodStart;
@@ -27,6 +27,7 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     uint256 private constant    inflationRateAfterOneYear = 1500;        // 15%
     uint256 private constant    inflationRateAfterTwoYears = 1250;       // 12.5%
     uint256 private constant    inflationRateAfterThreeYears = 1000;     // 10%
+    uint256 private constant    totalDaysInNonLeapYear = 365 days;
     
     uint256 private             releasedTokens;
   
@@ -36,13 +37,12 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     uint public percentageForBusiness;
     uint public percentageForDevelopment;
     
-    // Default Values: _percentageForBusiness = 50, _percentageForDevelopment = 50
     
     /// @author Gagandeep_HashCode
     /// @notice Contructor for initial setup
     /// @param _percentageForDevelopment Percentage value for Development contract
     /// @param _percentageForBusiness Percentage value for Business contract
-    constructor(uint _percentageForDevelopment, uint _percentageForBusiness) 
+    constructor(uint _percentageForDevelopment, uint _percentageForBusiness)      // Default Values: 50, 50
     public 
     {
             require(_percentageForDevelopment != 0);
@@ -52,52 +52,50 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
             owner                     = msg.sender;
             balances[msg.sender]      = initialSupply;
             totalSupply_              = initialSupply;
-            supplyPerDay              = totalSupply_.div(365);//366 need to do
+            supplyPerDay              = totalSupply_.div(365); // leap year to be discussed : 366 need to do
             // add pausable feature
 
             inflationPeriodStart      = now;
-            oneYearComplete           = inflationPeriodStart.add(365 days);// need to be in varibale
-            secondYearComplete        = oneYearComplete.add(365 days);
-            thirdYearComplete         = secondYearComplete.add(365 days);
+            oneYearComplete           = inflationPeriodStart.add(totalDaysInNonLeapYear); 
+            secondYearComplete        = oneYearComplete.add(totalDaysInNonLeapYear);
+            thirdYearComplete         = secondYearComplete.add(totalDaysInNonLeapYear);
 
             percentageForDevelopment  = _percentageForDevelopment; 
             percentageForBusiness     = _percentageForBusiness;
     }
 
 
-    // TODO: Add onlyAdmin modifier
     // TODO: Coin Minted HISTORY in coming phase
     /// @notice Function to mint new tokens and divide them between development and business contract
     function mintTokens(uint _timeLap) // function mintTokens()
     onlyOwner
     public 
-    {
-            // TODO: Will further call transferTokens() method to divide tokens between development and business
-            
+    { 
             uint256 amount = 0;
-            uint256 currentTime = now.add(_timeLap);
-            if (currentTime > oneYearComplete) {
-                if (currentTime > secondYearComplete) {
-                    if (currentTime > thirdYearComplete) {
-                        amount = (supplyPerDay.mul(inflationRateAfterThreeYears)).div(10000);     // div(10000)
-                    } else {
-                        amount = (supplyPerDay.mul(inflationRateAfterTwoYears)).div(10000);       // div(10000)
+            uint256 currentTime = now.add(_timeLap);    // remove .add(_timeLap)
+            if (currentTime >= inflationPeriodStart) {                                            
+                if (currentTime > oneYearComplete) {                                            
+                    if (currentTime > secondYearComplete) {                                     
+                        amount = (supplyPerDay.mul(inflationRateAfterThreeYears)).div(10000);   // 2 - 3 year and onwards
+                    } else {                                                                    
+                        amount = (supplyPerDay.mul(inflationRateAfterTwoYears)).div(10000);     // 1 - 2 year
                     }
                 } else {
-                    amount = (supplyPerDay.mul(inflationRateAfterOneYear)).div(10000);            // div(10000)
+                    amount = (supplyPerDay.mul(inflationRateAfterOneYear)).div(10000);           // 0 - 1 year
                 }
             } else {
-                revert();
+                revert();                                                                       // < 0 year
             }
             require (amount != 0);
-            mint(owner, amount); 
+            mint(owner, amount);
+            supplyPerDay = totalSupply_.div(365); // leap year?
             creditContracts();
     }
 
 
     // TODO: To be called only once via business contract. Add bool 
     // require(msg.sender == BusinessAcc(msg.sender))
-    function setBusinessAcc(address _address) // only owner
+    function setBusinessAcc(address _address) 
     public 
     {
             require(_address != address(0));
@@ -106,7 +104,7 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
 
 
     // TODO: To be called only once via development contract. Add bool 
-    function setDevelopmentAcc(address _address)  // only owner
+    function setDevelopmentAcc(address _address)  
     public 
     {
             require(_address != address(0));
@@ -114,10 +112,9 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     }
 
 
-    // this method should not be called in constructor because businessContract and developmentContract are not set at that time
     /// @notice Private function which transfer tokens into development and business contracts
-    function creditContracts() // private
-    public 
+    function creditContracts() 
+    private 
     {
             uint256 tokensForDev;
             uint256 tokensForBusi;
@@ -127,8 +124,6 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
             transfer(businessContract, tokensForDev);
             transfer(developmentContract, tokensForBusi);
 
-            // developmentContract.setDistributiveFigures();   // I think this is not required. Everything related to distributive figures will be handled within dev contract as there is no transfers required between there variables so setting these variable makes no sense
-            // evoke a method in development contract to further divide the funds
     }
 
 
@@ -151,38 +146,44 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     /// @param _address Address of the receiver whom tokens to be sent
     /// @param _tokens Amount of tokens that is sent
     function transferTokensFromBusiness(address _address, uint256 _tokens) 
-    // onlyOwner
+    onlyOwner
     public 
     { 
-            businessContract.transferTokens(_address, _tokens);  //  transferFrom(businessContract.address, _address, _tokens);
+            businessContract.transferTokens(_address, _tokens); 
     }
 
 
-    // function transferTokensFromBusinessToDevelopment() public { 
-    //     // will send balance to respective accounts
-    //     // will also invoke a method in development to futher distribute 50% 
-    //     // possibly this method will be private
-    // }
+    function transferTokensFromBusinessToDevelopment(uint256 _tokens) 
+    onlyOwner
+    public 
+    { 
+    
+            businessContract.transferTokens(address(developmentContract), _tokens);
+    }
 
 
-    // function transferTokensFromDevelopmentToBusiness() public { 
-    //     // will send balance to respective accounts
-    //     // will also invoke a method in development to futher distribute 50% 
-    //     // possibly this method will be private
-    // }
+    function transferTokensFromDevelopmentToBusiness(uint256 _tokens) 
+    onlyOwner
+    public 
+    { 
+    
+            developmentContract.transferTokens(address(businessContract), _tokens);
+    }
 
 
-    // // TODO: add onlyAdmin modifier
-
-    // /// @notice Function to update distributive figures between Development account and Business account
-    // /// @param _percentageForDevelopment to add new percentage value for development
-    // /// @param _percentageForBusiness to add new percentage value for business
-    // function updateDistributiveFigures(uint _percentageForDevelopment, uint _percentageForBusiness) public {
-    //     require (sum(_percentageForDevelopment,percentageForBusiness) == 100);               // developer% + business% = 100%
+    /// @notice Function to update distributive figures between Development account and Business account
+    /// @param _percentageForDevelopment to add new percentage value for development
+    /// @param _percentageForBusiness to add new percentage value for business
+    function updateDistributiveFiguresOfAccounts(uint _percentageForDevelopment, uint _percentageForBusiness)
+    onlyOwner
+    public 
+    {
+        require ( _percentageForDevelopment.add(_percentageForBusiness) == 100);    // developer% + business% = 100%
      
-    //     percentageForDevelopment = _percentageForDevelopment;
-    //     percentageForBusiness = _percentageForBusiness;
-    // }
+        percentageForDevelopment = _percentageForDevelopment;
+        percentageForBusiness = _percentageForBusiness;
+    }
+
 
     // ============================== Getter Methods ==============================================
 
@@ -196,6 +197,15 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
             return (inflationRateAfterOneYear, inflationRateAfterTwoYears, inflationRateAfterThreeYears);      
     }
 
+    /// @notice Function to fetch current contract address 
+    /// @return aegisEconomyCoin contract address
+    function getContractAddr() 
+    public 
+    view 
+    returns(address) 
+    {
+            return address(this);      
+    }
     
     /// @notice Function to fetch business contract address
     /// @return business contract address
@@ -226,10 +236,11 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     view 
     returns(uint256) 
     {
-            return supplyPerDay; // TBDBD
+            return supplyPerDay;
     }
 
     // TBD: We can also check balance directly without creating wrapper functions
+    // TBD: Do we need to create wrapper functions to update figures in developmentContract or should we call it by creating developmentContract obj directly?
 
     /// @notice Function to fetch balance of Development contract 
     /// @return _balance Amount of tokens available in development contract 
@@ -275,39 +286,42 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     }
 
 
-    // /// @notice Function to fetch balance available 
-    // /// @return _balance Amount of tokens available 
-    // function getBalance() public view returns (uint256 _balance) {
-    //     _balance = balances[address(developmentContract)].sum(balances[address(businessContract)]);
-    //     return;
-    // }
-
-
     // /// @notice Function to fetch amount of tokens sold 
     // /// @return Amount of tokens sold
-    // function getTotalTokensReleased() public view returns (uint256) {
+    // function getTotalTokensReleased() 
+    // public 
+    // view 
+    // returns (uint256) 
+    // {
     //     return releasedTokens;
     // }
 
 
-    // /// @notice Function to fetch percentage that is set for Development purpose
-    // /// @return percentage value that is set
-    // function getPercentageForDevelopment() public view returns (uint) {
-    //     return percentageForDevelopment;
-    // }
+    /// @notice Function to fetch percentage that is set for Development purpose
+    /// @return percentage value that is set
+    function getPercentageForDevelopment() 
+    public 
+    view 
+    returns (uint) 
+    {
+            return percentageForDevelopment;
+    }
 
 
-    // /// @notice Function to fetch percentage that is set for Business purpose
-    // /// @return percentage value that is set
-    // function getPercentageForBusiness() public view returns (uint) {
-    //     return percentageForBusiness;
-    // }
+    /// @notice Function to fetch percentage that is set for Business purpose
+    /// @return percentage value that is set
+    function getPercentageForBusiness() 
+    public 
+    view 
+    returns (uint) 
+    {
+            return percentageForBusiness;
+    }
 
-
-    // // ================================================================================================
+    // ================================================================================================
     
-    // // possible security measures 
-
+    // possible security measures 
+    // 
     // function updateBusinessContract(address _businessAcc) public {
     //     // need to understand the scope of this method
     //     businessContract = Business(_businessAcc);
