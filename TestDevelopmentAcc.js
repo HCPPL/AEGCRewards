@@ -23,11 +23,13 @@ contract('Development Contract', async (accounts) => {
 
 
         // Initial setup positive scenario
-        it('Case : Initialization ', async () => {
+        it('Case 1.1 : Initialization ', async () => {
               aegisCoinContract = await AegisCoin.new(50, 50, {from: deployerAddress}); 
               businessContract = await BusinessAcc.new(aegisCoinContract.address, {from: deployerAddress}); 
-              developmentContract = await DevelopmentAcc.new(aegisCoinContract.address, developementPercentage, voterPercentage, firstWinnerPercentage, secondWinnerPercentage, thirdWinnerPercentage, {from: deployerAddress});
-
+              await businessContract.setBusinessAccountForAegisCoin({from: deployerAddress});
+              developmentContract = await DevelopmentAcc.new(aegisCoinContract.address, 50, 50, 50, 35, 15, {from: deployerAddress}); 
+              await developmentContract.setDevelopmentAccountForAegisCoin({from: deployerAddress});
+              
               let getDevVoterPer = await aegisCoinContract.getDeveloperVoterPercentage();
               let getWinnerPer = await aegisCoinContract.getWinnerPercentage();
 
@@ -41,22 +43,50 @@ contract('Development Contract', async (accounts) => {
               assert.equal(getWinnerPer[2].valueOf(), thirdWinnerPercentage, "Third Winner Percentage does not match! ");
         });
 
-      // // Initial setup positive scenario
-      //   it('Case : Initialization ', async () => {
-      //         aegisCoinContract = await AegisCoin.new(50, 50, {from: deployerAddress}); 
-      //         businessContract = await BusinessAcc.new(aegisCoinContract.address, {from: deployerAddress}); 
-      //         developmentContract = await DevelopmentAcc.new(aegisCoinContract.address, {from: deployerAddress}); 
+        // Add new backlog
+        it('Case 2.1 : Add new backlog ', async () => {
+              aegisCoinContract = await AegisCoin.new(50, 50, {from: deployerAddress}); 
+              businessContract = await BusinessAcc.new(aegisCoinContract.address, {from: deployerAddress}); 
+              await businessContract.setBusinessAccountForAegisCoin({from: deployerAddress});
+              developmentContract = await DevelopmentAcc.new(aegisCoinContract.address, 50, 50, 50, 35, 15, {from: deployerAddress}); 
+              await developmentContract.setDevelopmentAccountForAegisCoin({from: deployerAddress});
               
-      //         aegisCoinContract.creditContracts();
-      //         // let totalSupply = await aegisCoinContract.totalSupply();
-      //         let owner_bal = await aegisCoinContract.balanceOf(deployerAddress);
-      //         let businessContract_bal = await aegisCoinContract.balanceOf(businessContract.address);
-      //         let developmentContract_bal = await aegisCoinContract.balanceOf(developmentContract.address);
-              
-      //     // console.log("\n Total Supply initialized ==> ", totalSupply.valueOf()); 
-      //     console.log("\n Balance of Owner/Deployer Address ==> ", owner_bal.valueOf());  
-      //     console.log("\n BusinessAcc Balance ==> ", businessContract_bal);  
-      //     console.log("\n DevelopmentAcc Balance ==> ", developmentContract_bal);
+              await aegisCoinContract.mintTokens(0);
 
-      //   });
+              await developmentContract.addNewBacklog(1001, 2000);
+              await developmentContract.addNewBacklog(2001, 2030);
+              await developmentContract.addNewBacklog(2001, 3030);  // it over rides previous value set with this id
+
+              let backlogIds = await developmentContract.getBacklogIDs();  
+              console.log("\n Backlog IDs: ", backlogIds.valueOf());
+
+              let backlogIdDetails = await developmentContract.getBacklogID(2001);    // id: 1000 . doesn't throw any error and return with 0 value
+              console.log("\n Backlog ID: 1001 Details: \n", backlogIdDetails.valueOf());            
+        });
+
+        // Remove Existing backlogid
+        it('Case 2.1 : Add new backlog ', async () => {
+              aegisCoinContract = await AegisCoin.new(50, 50, {from: deployerAddress}); 
+              businessContract = await BusinessAcc.new(aegisCoinContract.address, {from: deployerAddress}); 
+              await businessContract.setBusinessAccountForAegisCoin({from: deployerAddress});
+              developmentContract = await DevelopmentAcc.new(aegisCoinContract.address, 50, 50, 50, 35, 15, {from: deployerAddress}); 
+              await developmentContract.setDevelopmentAccountForAegisCoin({from: deployerAddress});
+              
+              await aegisCoinContract.mintTokens(0);
+
+              await developmentContract.addNewBacklog(1001, 2030);
+              await developmentContract.addNewBacklog(2001, 3030);
+              await developmentContract.addNewBacklog(3001, 4030);
+              await developmentContract.addNewBacklog(4001, 5030);
+
+              await developmentContract.deleteBacklog(2001);
+
+              let backlogIds = await developmentContract.getBacklogIDs();  
+              console.log("\n Backlog IDs: ", backlogIds.valueOf());
+
+              let backlogIdDetails = await developmentContract.getBacklogID(2001);    // id: 1000 . doesn't throw any error and return with 0 value
+              console.log("\n Backlog ID: 1001 Details: \n", backlogIdDetails.valueOf());            
+        });
+
+        // Remove non-existing backlogid
 });
