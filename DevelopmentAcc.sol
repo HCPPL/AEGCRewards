@@ -4,10 +4,10 @@ import "./contracts/ownership/Ownable.sol";
 import "./AegisEconomyCoin.sol";
 import "./contracts/math/SafeMath.sol";
 
-
 contract DevelopmentAcc is Ownable {	
 
  	AegisEconomyCoin public aegisCoin;
+ 	using SafeMath for uint256;
 
  	uint256 public developersFundPercentage; 
  	uint256 public votersFundPercentage; 
@@ -15,6 +15,8 @@ contract DevelopmentAcc is Ownable {
  	uint256 public firstWinnerPercentage; 
  	uint256 public secondWinnerPercentage; 
  	uint256 public thirdWinnerPercentage; 
+
+ 	uint256 public totalReserved;
 
  	/// Modifier to allow only aegisCoin contract to call a method
  	modifier onlyAdmin() {
@@ -34,12 +36,13 @@ contract DevelopmentAcc is Ownable {
 			require(_address != address(0));
 			aegisCoin = _address;
 			
+			totalReserved = 0;
 			setDeveloperVoterPercentage(_devPercentage, _voterPercentage);
 			setWinnersPercentage(_firstWinnerPer, _secondWinnerPer, _thirdWinnerPer);
 	}	
 
 
-    function setDevelopmentAccountForAegisCoin() 
+    function setDevelopmentAccountForAegisCoin() 			// update
 	onlyOwner
 	public
 	{
@@ -91,7 +94,7 @@ contract DevelopmentAcc is Ownable {
 	function updateDeveloperVoterPercentage(uint256 _devPercentage, uint256 _voterPercentage) 
 	public 
 	{
-        	// require ( _devPercentage.add(_voterPercentage) == 100); 
+        	require ( _devPercentage.add(_voterPercentage) == 100); 
 			setDeveloperVoterPercentage(_devPercentage, _voterPercentage);
 	}
 
@@ -106,94 +109,78 @@ contract DevelopmentAcc is Ownable {
 	    uint256 _thirdWinnerPer) 
 	public 
 	{
-            // require ( _firstWinnerPer.add(_secondWinnerPer.add(_thirdWinnerPer)) == 100); 
+            require ( _firstWinnerPer.add(_secondWinnerPer.add(_thirdWinnerPer)) == 100); 
 			updateWinnersPercentage(_firstWinnerPer, _secondWinnerPer, _thirdWinnerPer);
 	}
 
 
-	// function createBacklog() {
-	// 	// set reserved value and other variables here 
-	// }
+	// Suggestions function to keep track of price winners
+	// for that mapping will be there and this method will be called (and will throw an event) whenever transactions are made to winners and reviewers
+	function releaseTokens(uint256 _backlogId,
+	    address _firstWinner, 
+		address _secondWinner, 
+		address _thirdWinner,
+		uint256 _totalVoters)			
+	public 
+	{
+			// TODO: check for backlog-id existence
+
+			uint256 tokensForDevelopers;
+			uint256 tokensForVoters;
+
+			uint256 tokensForFirstWinner;
+			uint256 tokensForSecondWinner;
+			uint256 tokensForThirdWinner;
+
+			uint256 backlogTokenAmount = backlogId2backlogDetails[_backlogId].totalTokens;
+
+			(tokensForDevelopers, tokensForVoters) = calculateFunds(backlogTokenAmount);
+			(tokensForFirstWinner, tokensForSecondWinner, tokensForThirdWinner) = calculateWinnerFunds(tokensForDevelopers);
+			
+			// revert if (totalVoters == 0) and (tokensPerVoter != 0)
+			backlogId2backlogDetails[_backlogId].tokensPerVoter = calculateVoterFunds(tokensForVoters, _totalVoters);
+
+			// do token amount check with reserved value and not with owner's balance before sending it to transfer function
+
+			aegisCoin.transfer(_firstWinner, tokensForFirstWinner);
+			aegisCoin.transfer(_secondWinner, tokensForSecondWinner);
+			aegisCoin.transfer(_thirdWinner, tokensForThirdWinner);
+
+			// TODO: transfer funds to all voters // call this separately
+	} 
+
+	/// @notice Function to calculate token value for developers and voters as per the backlog amount given
+	/// @param _backlogAmount Amount of token assigned to the given backlog
+	/// @return _tokensForDev Amount of tokens reserved for developers
+	/// @return _tokensForVoters Amount of tokens reserved for voters
+	function calculateFunds(uint256 _backlogAmount)
+	private
+	returns (uint256 _tokensForDev, uint256 _tokensForVoters) 
+	{
+			_tokensForDev = (_backlogAmount.mul(developersFundPercentage)).div(100);
+			_tokensForVoters = (_backlogAmount.mul(votersFundPercentage)).div(100);
+			return;
+	}
 
 
-	// // Suggestions function to keep track of price winners
-	// // for that mapping will be there and this method will be called (and will throw an event) whenever transactions are made to winners and reviewers
-	// function releaseTokens(address _firstWinner, 
-	// 	address _secondWinner, 
-	// 	address _thirdWinner, 
-	// 	uint256 _backlogTokenAmount,
-	// 	uint256 _totalVoters)			// param: backlog-id - map backlog-id with totalVoters/TokensPerVoter
-	// public 
-	// {
-	// 		// param: reviewers, first/second/third winner address and unique-id
-	// 		// call releaseTokensForCompleteBackLog() method
-	// 		uint256 tokensForDevelopers;
-	// 		uint256 tokensForVoters;
-
-	// 		uint256 tokensForFirstWinner;
-	// 		uint256 tokensForSecondWinner;
-	// 		uint256 tokensForThirdWinner;
-
-	// 		(tokensForDevelopers, tokensForVoters) = calculateFunds(_backlogTokenAmount);
-
-	// 		(tokensForFirstWinner, tokensForSecondWinner, tokensForThirdWinner) = calculateWinnerFunds(tokensForDevelopers);
-
-	// 		uint256 tokensPerVoter = calculateVoterFunds(tokensForVoters, _totalVoters);
-
-	// 		// do token amount check with reserved value and not with owner's balance before sending it to transfer function
-
-	// 		aegisCoin.transfer(_firstWinner, tokensForFirstWinner);
-	// 		aegisCoin.transfer(_secondWinner, tokensForSecondWinner);
-	// 		aegisCoin.transfer(_thirdWinner, tokensForThirdWinner);
-
-	// 		// TODO: transfer funds to all voters
-	// } 
-
-	// /// @notice Function to calculate token value for developers and voters as per the backlog amount given
-	// /// @param _backlogAmount Amount of token assigned to the given backlog
-	// /// @return _tokensForDev Amount of tokens reserved for developers
-	// /// @return _tokensForVoters Amount of tokens reserved for voters
-	// function calculateFunds(uint256 _backlogAmount)
-	// private
-	// returns (uint256 _tokensForDev, uint256 _tokensForVoters) 
-	// {
-	// 		_tokensForDev = (_backlogAmount.mul(developersFundPercentage)).div(100);
-	// 		_tokensForVoters = (_backlogAmount.mul(votersFundPercentage)).div(100);
-	// 		return;
-	// }
+	function calculateWinnerFunds(uint256 _backlogAmountForDevelopers) 
+	private
+	returns (uint256 _tokensForFirstWinner, uint256 _tokensForSecondWinner, uint256 _tokensForThirdWinner)
+	{
+			_tokensForFirstWinner = (_backlogAmountForDevelopers.mul(firstWinnerPercentage)).div(100);
+			_tokensForSecondWinner = (_backlogAmountForDevelopers.mul(secondWinnerPercentage)).div(100);
+			_tokensForThirdWinner = (_backlogAmountForDevelopers.mul(thirdWinnerPercentage)).div(100);
+			return;
+	}
 
 
-	// function calculateWinnerFunds(uint256 _backlogAmountForDevelopers) 
-	// private
-	// returns (uint256 _tokensForFirstWinner, uint256 _tokensForSecondWinner, uint256 _tokensForThirdWinner)
-	// {
-	// 		_tokensForFirstWinner = (_backlogAmountForDevelopers.mul(firstWinnerPercentage)).div(100);
-	// 		_tokensForSecondWinner = (_backlogAmountForDevelopers.mul(secondWinnerPercentage)).div(100);
-	// 		_tokensForThirdWinner = (_backlogAmountForDevelopers.mul(thirdWinnerPercentage)).div(100);
-	// 		return;
-	// }
-
-
-	// function calculateVoterFunds(uint256 _backlogAmountForVoters,uint256 _totalVoters)
-	// private 
-	// returns (uint256 _tokensPerVoter)
-	// {
-	// 		_tokensPerVoter = _backlogAmountForVoters.div(_totalVoters);
-	// 		return;
-	// }
-
-
-	// // param: backlog-id 
-	// // as backlog-id will be mapped with tokensPerVoter. We need not to recalculate or pass it from php. 
-	// // this will be handled withing the smart contract
-	// function releaseTokensForVoters(address[] _voters, uint256 _tokensPerVoter)  
-	// public
-	// {
-	// 		// check if array length is 20
-	// 		address[] voters = _voters;
-	// 		// run loop from 0-20
-	// 		// transfer(voters[i], _tokensPerVoter);
-	// }
+	function calculateVoterFunds(uint256 _backlogAmountForVoters,uint256 _totalVoters)
+	private 
+	returns (uint256 _tokensPerVoter)
+	{
+			_tokensPerVoter = _backlogAmountForVoters.div(_totalVoters);
+			return;
+	}
 
 
 
@@ -206,41 +193,108 @@ contract DevelopmentAcc is Ownable {
 //  */
 // 	struct Status {
 // 			// where status will be a struct with values as follows:
-// 			// Status: -1 : cancelled/deleted	// backlog cancelled
+// 			// Status: -1 : cancelled/deleted	// backlog cancelled			// considering 5 for now
 // 			// 			0 : not started			// backlog on hold
 // 			// 			1 : started				// backlog start of submission
 // 			// 			2 : completed			// backlog submission + voting period ended		// should be separated
 // 			// 			3 : close				// backlog winners and reviewers are paid
 // 	}
 
-
-// 	struct backlog {
-// 		uint amount;
-// 		Status value;			// will have only 5 values set here		// probably another struct not required
-// 	}
+	struct backlogDetails {
+    //  uint256 backlogId;
+        uint256 totalTokens;
+        uint256 totalVoters;
+		uint256 statusValue;					// will have only 5 values set here		// probably another struct not required
+		// Status  value;					// will have only 5 values set here		// probably another struct not required
+		uint256 tokensPerVoter;
+	}
 	
-// 	mapping (uint => uint) backlogId2backlog;
-// 			// create a map:
-// 			// unique-id => value => Status
-// 			// map (backlog-id => tokenAmount => Status)
-//         	// BL-1001 => 25k => 0;
+	mapping (uint256 => backlogDetails) backlogId2backlogDetails;
+
+	uint256[] public backlogIds;
 
 
-// 	function addNewBacklog() {
-// 		// this method will add new record to mapping
-// 		// will set status = 0
-// 		// will have params: unique-id, value
-// 	}
+	function addNewBacklog(uint256 _backlogId, uint256 _tokens) 
+	public
+	{
+		// this method will add new record to mapping
+		// maintain mapping of the structure: backlogId ==> tokensReserved ==> set Status: 0
+
+		// TODO: if backlog-id already exist throw revert // updates will be made in updateBacklog method
+		backlogDetails backlogId = backlogId2backlogDetails[_backlogId];
+
+		backlogId.totalTokens = _tokens;
+		backlogId.totalVoters = 0;
+		backlogId.statusValue = 0;
+
+		backlogIds.push(_backlogId)-1;
+
+		totalReserved = totalReserved.add(_tokens);		// set reserved value and other variables here
+		// emit new backlog added
+	}
 
 
-// 	function deleteBacklog() {
-// 		// check for it's existence
-// 		// set status = -1
-// 		// release reserved tokens and update the total balance of current balance
-// 		// params: unique-id
-// 	}
+	// in progress 		// testing required
+	function updateBacklog(uint256 _backlogId, uint256 _tokens) 
+	public
+	{
+		bool existed = false;
 
-// 	// map reviewers to backlog unique-id
+		for (uint i=0; i< backlogIds.length; i++) {
+			if (backlogIds[i] == _backlogId) {
+				existed = true;		
+			}
+		}
+
+		require (existed == true);
+
+		backlogDetails backlogId = backlogId2backlogDetails[_backlogId];
+
+		uint256 newTokens      = 0;
+		uint256 newTotalTokens = 0; 
+
+		uint256 tokens = backlogId.totalTokens;
+
+		if(tokens < _tokens) {
+				newTokens = _tokens.sub(tokens);
+		} else {
+			    newTokens = tokens.sub(_tokens);
+		}
+
+		newTotalTokens = tokens.add(newTokens);
+
+		backlogId.totalTokens = newTotalTokens;
+		backlogId.totalVoters = 0;				// check for the scenario if this should be in requirement statement i.e. voters should be 0 if you want to update the backlog tokens or not?
+		backlogId.statusValue = 0;				// should here be another status value to mention that it's ben updated! i think no need.
+
+		// backlogIds.push(_backlogId)-1;		// look for what it does
+
+		totalReserved = totalReserved.add(_tokens);		// set reserved value and other variables here
+	}
+
+
+	function deleteBacklog(uint256 _backlogId) {				// params: unique-id
+		// check for it's existence
+		bool existed = false;
+
+		for (uint i=0; i< backlogIds.length; i++) {
+			if (backlogIds[i] == _backlogId) {
+				existed = true;		
+			}
+		}
+
+		require (existed == true);
+
+		uint256 tokenAmt = backlogId2backlogDetails[_backlogId].totalTokens;
+		totalReserved = totalReserved.sub(tokenAmt);									// release reserved tokens and update the total balance of current balance
+
+		backlogId2backlogDetails[_backlogId].totalTokens = 0;							// set total tokens = 0
+		// backlogId2backlogDetails[_backlogId].totalVoters = 0;						// check if this can be a case?
+		backlogId2backlogDetails[_backlogId].statusValue = 5;							// set status = -1
+
+		// emit tokens Released 
+		// emit successful deletion of backlog
+	}
 
 
 // 	function releaseTokensForCompleteBackLog() {
@@ -269,13 +323,54 @@ contract DevelopmentAcc is Ownable {
 // 	}
 	
 
-// 	function transferToReviewers() {
+// 	function transferToVoters() {
 // 		// will check if status is 2
 // 		// params: unique-id, []reviewersAddresses, fundstotransferEach
 // 		// will call transfer() in loop to process multiple transactions
 // 	}
 
+	// // param: backlog-id 
+	// // as backlog-id will be mapped with tokensPerVoter. We need not to recalculate or pass it from php. 
+	// // this will be handled withing the smart contract
+	// function releaseTokensForVoters(address[] _voters, uint256 _tokensPerVoter)  
+	// public
+	// {
+	// 		// check if array length is 20
+	// 		address[] voters = _voters;
+	// 		// run loop from 0-20
+	// 		// transfer(voters[i], _tokensPerVoter);
+	// }
+
+
+
 	// ========================= Getter Methods ===============================
+
+	function getBacklogIDs()
+	view
+	public
+	returns(uint256[])
+	{
+			return backlogIds;	
+	}
+
+
+	function getBacklogID(uint256 _backlogId) 
+	view
+	public 
+	returns (uint256, uint256, uint256) 
+	{
+    	    return (backlogId2backlogDetails[_backlogId].totalTokens, backlogId2backlogDetails[_backlogId].totalVoters, backlogId2backlogDetails[_backlogId].statusValue);
+    }
+
+    function countBacklogIds() 
+    view 
+    public 
+    returns (uint) 
+    {
+ 	       return backlogIds.length;
+    }
+
+
 
     /// @notice Function to fetch percentage distribution set for Developers and Voters
     /// @return Developers Fund Percentage
