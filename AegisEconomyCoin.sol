@@ -17,32 +17,33 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     string  public  constant    name = "Aegis Economy Coin";
     string  public  constant    symbol = "AGEC";
     uint256 public  constant    decimals = 18;
-    uint256 private constant    initialSupply =  50*(10**6)* (10**18);    // 50 million Tokens //1500000 * (10**5);
-    uint256 public              supplyPerDay;
+    uint256 private constant    initialSupply =  50*(10**6)* (10**18);    // 50 million Tokens
+    uint256 private             supplyPerDay;
 
     uint256 private             inflationPeriodStart;
     uint256 private             oneYearComplete;
     uint256 private             secondYearComplete;
     uint256 private             thirdYearComplete;
-    uint256 private constant    inflationRateAfterOneYear = 1500;        // 15%
+    uint256 private constant    inflationRateAfterOneYear = 1500;        // 15%         // TODO: Look if this is can be avoided
     uint256 private constant    inflationRateAfterTwoYears = 1250;       // 12.5%
     uint256 private constant    inflationRateAfterThreeYears = 1000;     // 10%
     uint256 private constant    totalDaysInNonLeapYear = 365 days;
     
     uint256 private             releasedTokens;
-  
-    BusinessAcc public businessContract;           
-    DevelopmentAcc public developmentContract;     
-
-    uint public percentageForBusiness;
-    uint public percentageForDevelopment;
+    uint    private              percentageForBusiness;
+    uint    private              percentageForDevelopment;  
     
+    BusinessAcc    private       businessContract;           
+    DevelopmentAcc private       developmentContract;     
+
+    // TBD: add pausable feature???
+    // TODO: Coin Minted HISTORY in coming phase
     
     /// @author Gagandeep_HashCode
     /// @notice Contructor for initial setup
     /// @param _percentageForDevelopment Percentage value for Development contract
     /// @param _percentageForBusiness Percentage value for Business contract
-    constructor(uint _percentageForDevelopment, uint _percentageForBusiness)      // Default Values: 50, 50
+    constructor(uint _percentageForDevelopment, uint _percentageForBusiness)
     public 
     {
             require(_percentageForDevelopment != 0);
@@ -52,27 +53,23 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
             owner                     = msg.sender;
             balances[msg.sender]      = initialSupply;
             totalSupply_              = initialSupply;
-            supplyPerDay              = totalSupply_.div(365); // leap year to be discussed : 366 need to do
-            // add pausable feature
-
+            supplyPerDay              = totalSupply_.div(365);
             inflationPeriodStart      = now;
             oneYearComplete           = inflationPeriodStart.add(totalDaysInNonLeapYear); 
             secondYearComplete        = oneYearComplete.add(totalDaysInNonLeapYear);
             thirdYearComplete         = secondYearComplete.add(totalDaysInNonLeapYear);
-
             percentageForDevelopment  = _percentageForDevelopment; 
             percentageForBusiness     = _percentageForBusiness;
     }
 
 
-    // TODO: Coin Minted HISTORY in coming phase
     /// @notice Function to mint new tokens and divide them between development and business contract
-    function mintTokens(uint _timeLap) // function mintTokens()
+    function mintTokens(uint _timeLap)                                            // IMPORTANT!! remove parameter!
     onlyOwner
     public 
     { 
             uint256 amount = 0;
-            uint256 currentTime = now.add(_timeLap);    // remove .add(_timeLap)
+            uint256 currentTime = now.add(_timeLap);                              // IMPORTANT!! remove .add(_timeLap)
             if (currentTime >= inflationPeriodStart) {                                            
                 if (currentTime > oneYearComplete) {                                            
                     if (currentTime > secondYearComplete) {                                     
@@ -88,27 +85,38 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
             }
             require (amount != 0);
             mint(owner, amount);
-            supplyPerDay = totalSupply_.div(365); // leap year?
+            supplyPerDay = totalSupply_.div(365);                        
             creditContracts();
     }
 
 
-    // TODO: To be called only once via business contract. Add bool 
-    // require(msg.sender == BusinessAcc(msg.sender))
-    function setBusinessAcc(address _address) 
+    // TODO: Parameter should be contract address type
+    /// @notice Function to link business contract
+    /// @param _address Business Contract Address
+    function setBusinessAcc(BusinessAcc _address) 
+    onlyOwner
     public 
     {
+            
+            require (businessContract == address(0)); 
             require(_address != address(0));
-            businessContract = BusinessAcc(_address);
+
+            businessContract = _address;
     }
 
 
-    // TODO: To be called only once via development contract. Add bool 
-    function setDevelopmentAcc(address _address)  
+    // TODO: Parameter should be contract address type
+    /// @notice Function to link development contract
+    /// @param _address Development Contract Address
+    function setDevelopmentAcc(DevelopmentAcc _address)  
+    onlyOwner
     public 
     {
+            require (developmentContract == address(0));  
             require(_address != address(0));
-            developmentContract = DevelopmentAcc(_address);
+            require(DevelopmentAcc(_address) == _address);
+
+            developmentContract = _address;
     }
 
 
@@ -123,7 +131,7 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
             
             transfer(businessContract, tokensForDev);
             transfer(developmentContract, tokensForBusi);
-
+            developmentContract.creditRemainingTokens(tokensForDev);
     }
 
 
@@ -149,24 +157,28 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     onlyOwner
     public 
     { 
+            require(_address != address(0));
+            require(_tokens != 0);
             businessContract.transferTokens(_address, _tokens); 
     }
 
-
+    /// @notice Wrapper function that will transfer funds from business contract to development contract by owner
+    /// @param _tokens Amount of tokens that is sent
     function transferTokensFromBusinessToDevelopment(uint256 _tokens) 
     onlyOwner
     public 
     { 
-    
+            require(_tokens != 0);
             businessContract.transferTokens(address(developmentContract), _tokens);
     }
 
-
+    /// @notice Wrapper function that will transfer funds from development contract to business contract by owner
+    /// @param _tokens Amount of tokens that is sent
     function transferTokensFromDevelopmentToBusiness(uint256 _tokens) 
     onlyOwner
     public 
     { 
-    
+            require(_tokens != 0);
             developmentContract.transferTokens(address(businessContract), _tokens);
     }
 
@@ -178,7 +190,9 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     onlyOwner
     public 
     {
-        require ( _percentageForDevelopment.add(_percentageForBusiness) == 100);    // developer% + business% = 100%
+        require(_percentageForDevelopment != 0);
+        require(_percentageForBusiness != 0);
+        require(_percentageForDevelopment.add(_percentageForBusiness) == 100);    // developer% + business% = 100%
      
         percentageForDevelopment = _percentageForDevelopment;
         percentageForBusiness = _percentageForBusiness;
@@ -239,8 +253,6 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
             return supplyPerDay;
     }
 
-    // TBD: We can also check balance directly without creating wrapper functions
-    // TBD: Do we need to create wrapper functions to update figures in developmentContract or should we call it by creating developmentContract obj directly?
 
     /// @notice Function to fetch balance of Development contract 
     /// @return _balance Amount of tokens available in development contract 
@@ -317,20 +329,5 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     {
             return percentageForBusiness;
     }
-
-    // ================================================================================================
-    
-    // possible security measures 
-    // 
-    // function updateBusinessContract(address _businessAcc) public {
-    //     // need to understand the scope of this method
-    //     businessContract = Business(_businessAcc);
-    // }
-   
-
-    // function updateDevelopmentContract(address _DevelopmentAcc) public {
-    //     // need to understand the scope of this method
-    //     developmentContract = Development(_DevelopmentAcc);
-    // }
 
 }
