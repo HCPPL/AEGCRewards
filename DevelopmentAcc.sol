@@ -6,17 +6,21 @@ import "./contracts/math/SafeMath.sol";
 
 contract DevelopmentAcc is Ownable {	
 
- 	AegisEconomyCoin public aegisCoin;
  	using SafeMath for uint256;
 
- 	uint256 public developersFundPercentage; 
- 	uint256 public votersFundPercentage; 
- 	
- 	uint256 public firstWinnerPercentage; 
- 	uint256 public secondWinnerPercentage; 
- 	uint256 public thirdWinnerPercentage; 
+ 	AegisEconomyCoin private aegisCoin;
+ 	uint256          private developersFundPercentage; 
+ 	uint256          private votersFundPercentage;  	
+ 	uint256          private firstWinnerPercentage; 
+ 	uint256          private secondWinnerPercentage; 
+ 	uint256          private thirdWinnerPercentage; 
+ 	uint256          private totalTokensReserved;
+ 	uint256          private remainingTokensForBacklog;
 
- 	uint256 public totalTokensReserved;
+
+ 	/* *********
+ 	 * MODIFIERS
+ 	 */
 
  	/// Modifier to allow only aegisCoin contract to call a method
  	modifier onlyAdmin() {
@@ -31,7 +35,32 @@ contract DevelopmentAcc is Ownable {
   		_;
   	}
 
+  	/// Modifier to check if backlogId is valid
+  	modifier ifBacklogNotExisted(uint256 _backlogId) {
+  		bool value = checkForBacklogExistence(_backlogId);
+  		require(value == false);
+  		_;
+  	}
+
+  	// /// Modifier to check if status is in submission state
+  	// modifier ifBacklogInSubmissionState(uint256 _backlogId) {
+  	// 	bool value = checkStatus(_backlogId);
+  	// 	require(value == true);
+  	// 	_;
+  	// }
  	
+
+	/* ******
+	 * EVENTS
+	 */
+
+  	event SuccessfulAdditionOfNewBacklog(uint256 _backlogId, uint256 _tokens);
+  	event SuccessfulUpdateOfBacklog(uint256 _backlogId, uint256 _tokens);
+  	event SuccessfulDeletionOfBacklog(uint256 _backlogId);
+  	event SuccessfulTokensTransferToWinners(uint256 _backlogId);
+  	event SuccessfulTokensTransferToVoters(uint256 _backlogId);
+
+	
 	/// @author Gagandeep_HashCode
     /// @notice Contructor for initial setup
 	constructor (AegisEconomyCoin _address, 
@@ -41,21 +70,23 @@ contract DevelopmentAcc is Ownable {
 		uint256 _secondWinnerPer, 
 		uint256 _thirdWinnerPer) 
 	{
+		// TODO: address should be of type contract address
+
 			require(_address != address(0));
+			require(_devPercentage != 0);
+			require(_voterPercentage != 0);
+			require(_devPercentage.add(_voterPercentage) == 100);
+			require(_firstWinnerPer != 0);
+			require(_secondWinnerPer != 0);
+			require(_thirdWinnerPer != 0);
+			require(_firstWinnerPer.add(_secondWinnerPer.add(_thirdWinnerPer)) == 100);
+
 			aegisCoin = _address;
-			
 			totalTokensReserved = 0;
+			remainingTokensForBacklog = 0;
 			setDeveloperVoterPercentage(_devPercentage, _voterPercentage);
 			setWinnersPercentage(_firstWinnerPer, _secondWinnerPer, _thirdWinnerPer);
 	}	
-
-
-    function setDevelopmentAccountForAegisCoin() 			// update
-	onlyOwner
-	public
-	{
-			aegisCoin.setDevelopmentAcc(address(this));
-	}
 
 
 	/// @notice Function to transfer development funds to any address
@@ -68,20 +99,27 @@ contract DevelopmentAcc is Ownable {
 			aegisCoin.transfer(_receiver, _value);
 	}
 
+	function creditRemainingTokens(uint256 _tokens)
+	onlyAdmin
+	public
+	{
+			remainingTokensForBacklog = remainingTokensForBacklog.add(_tokens);
+	}
 
-	// Set figures for developer and reviewers
+
 	/// @notice Wrapper Function to update distributive percentage figures for developers and voters
 	/// @param _devPercentage Percentage value for developers
 	/// @param _voterPercentage Percentage value for voters
 	function updateDeveloperVoterPercentage(uint256 _devPercentage, uint256 _voterPercentage) 
 	public 
 	{
-        	require ( _devPercentage.add(_voterPercentage) == 100); 
+			require (_devPercentage != 0);
+			require (_voterPercentage != 0);
+        	require (_devPercentage.add(_voterPercentage) == 100); 		
 			setDeveloperVoterPercentage(_devPercentage, _voterPercentage);
 	}
 
 
-	// Set figures for first, second and third winners
 	/// @notice Function to update distributive percentage figures for first, second and third winners
 	/// @param _firstWinnerPer Percentage value for first winner
 	/// @param _secondWinnerPer Percentage value for second winner
@@ -91,114 +129,78 @@ contract DevelopmentAcc is Ownable {
 	    uint256 _thirdWinnerPer) 
 	public 
 	{
+			require (_firstWinnerPer != 0);
+			require (_secondWinnerPer != 0);
+			require (_thirdWinnerPer != 0);
             require ( _firstWinnerPer.add(_secondWinnerPer.add(_thirdWinnerPer)) == 100); 
-			updateWinnersPercentage(_firstWinnerPer, _secondWinnerPer, _thirdWinnerPer);
+			setWinnersPercentage(_firstWinnerPer, _secondWinnerPer, _thirdWinnerPer);
 	}
 
 
-		// param: unique-id, first/second/third winner-addresses, array of reviewers
-		// divide funds and then transfer to the addresses accordingly
-		// funds divided as 
-		// 	- firstWinnerFund
-		//  - secondWinnerFund
-		//  - thirdWinnerFund
-		//  - reviewerFund
-
-
-	function setStatus(uint256 _backlogId, uint256 _statusValue) 
+	/// @notice Function to update the status value for given backlog-id
+	/// @param _backlogId Backlog ID
+	/// @param _statusValue Status Value in uint256
+	/// @return Return with bool value as true if update is a success else otherwise
+	function setBacklogStatus(uint256 _backlogId, uint256 _statusValue) 
 	onlyOwner
 	public
 	returns (bool)
 	{
 			require(_backlogId != 0);
-			// TODO: check if _statusValue is an existing status or not?
-			
-			backlogId2backlogDetails[_backlogId].statusValue == _statusValue;
+			require(backlogId2backlogDetails[_backlogId].statusValue != 5); // can't set status to 3 i.e. payment done
+			require(backlogId2backlogDetails[_backlogId].statusValue >= 0); // 0 <= status value <= 6
+			require(backlogId2backlogDetails[_backlogId].statusValue <= 6); // 0 <= status value <= 6
+			backlogId2backlogDetails[_backlogId].statusValue = _statusValue;
 			return true;
 	}
 
 
-// /* 	// Need these in case we need to display status
-// 	string public constant STATUS_CANCEL = "cancelled"; 
-// 	string public constant STATUS_READY = "ready"; 
-// 	string public constant STATUS_START = "started"; 
-// 	string public constant STATUS_COMPLETE = "completed"; 
-// 	string public constant STATUS_CLOSE = "closed";
-//  */
-// 	struct Status {
-// 			// where status will be a struct with values as follows:
-// 			// Status: -1 : cancelled/deleted	// backlog cancelled			// considering 5 for now
-// 			// 			0 : not started			// backlog on hold
-// 			// 			1 : started				// backlog start of submission
-// 			// 			2 : completed			// backlog submission + voting period ended		// should be separated
-// 			// 			3 : close				// backlog winners and reviewers are paid
-// 	}
+    /* ***************************************************************************************
+    		Status Value: 
+
+			0 : not started				// backlog is approved by admin and is waiting for the arrival of backlog start date
+			1 : submission-started		// backlog submission period started
+			2 : submission-completed	// backlog submission period ended
+ 			3 : voting-started			// backlog voting period started
+ 			4 : voting-ended 			// backlog voting period ended	
+			5 : close				    // backlog winners and reviewers are paid
+        	6 : cancelled/deleted	    // backlog cancelled
+     */
 
 	struct backlogDetails {
-        // uint256 backlogId;
         uint256 totalTokens;
         uint256 totalVoters;
-		uint256 statusValue;					// will have only 5 values set here	
-		// Status  value;					    // probably another struct not required
+		uint256 statusValue;	// will have only 7 values set here	
 		uint256 tokensPerVoter;
 	}
 	
-	mapping (uint256 => backlogDetails) backlogId2backlogDetails;
+	mapping (uint256 => backlogDetails) private backlogId2backlogDetails;
+	uint256[] private backlogIds;
 
-	uint256[] public backlogIds;
 
-
-	// TBD: We can also look into modifiers to check status before calling a particular method.
-	// For example: before calling updateBacklog() check if status is as required? but for that time management should be integrated to check if deadline was reached or not. 
-
+	/// @notice Function to record a new backlog
+	/// @param _backlogId Backlog ID 
+	/// @param _tokens Amount of tokens to be reserved for the given backlog id
 	function addNewBacklog(uint256 _backlogId, uint256 _tokens) 
-	public
-	{
-		// this method will add new record to mapping
-		// maintain mapping of the structure: backlogId ==> tokensReserved ==> set Status: 0
-
-		// TODO: if backlog-id already exist throw revert // updates will be made in updateBacklog method
-		backlogDetails backlogId = backlogId2backlogDetails[_backlogId];
-
-		backlogId.totalTokens = _tokens;
-		backlogId.totalVoters = 0;
-		backlogId.statusValue = 0;
-
-		backlogIds.push(_backlogId)-1;
-
-		totalTokensReserved = totalTokensReserved.add(_tokens);		// set reserved value and other variables here
-		// emit new backlog added
-	}
-
-
-	// in progress 		// testing required
-	function updateBacklog(uint256 _backlogId, uint256 _tokens) 
-	ifBacklogExisted(_backlogId)		
+	onlyOwner
+	ifBacklogNotExisted(_backlogId)
 	public
 	{
 		require(_backlogId != 0);
 		require(_tokens != 0);
+		require(_tokens <= remainingTokensForBacklog); 
 
+		// pushing new backlog id to backlog-ids array
 		backlogDetails backlogId = backlogId2backlogDetails[_backlogId];
-
-		uint256 newTokens      = 0;
-		uint256 newTotalTokens = 0; 
-
-		uint256 tokens = backlogId.totalTokens;
-
-		if(tokens < _tokens) {
-				newTokens = _tokens.sub(tokens);
-		} else {
-			    newTokens = tokens.sub(_tokens);
-		}
-
-		newTotalTokens = tokens.add(newTokens);
-
-		backlogId.totalTokens = newTotalTokens;
-		backlogId.totalVoters = 0;				// check for the scenario if this should be in requirement statement i.e. voters should be 0 if you want to update the backlog tokens or not?
-		backlogId.statusValue = 0;				// should here be another status value to mention that it's ben updated! i think no need.
-
-		totalTokensReserved = totalTokensReserved.add(_tokens);		// set reserved value and other variables here
+		// adding new record to backlog struct
+		backlogId.totalTokens = _tokens;
+		backlogId.totalVoters = 0;
+		backlogId.statusValue = 0;
+		backlogIds.push(_backlogId)-1;
+		// set reserved value and other variables here
+		totalTokensReserved = totalTokensReserved.add(_tokens);
+		remainingTokensForBacklog = remainingTokensForBacklog.sub(_tokens);
+		SuccessfulAdditionOfNewBacklog(_backlogId, _tokens);
 	}
 
 
@@ -206,71 +208,98 @@ contract DevelopmentAcc is Ownable {
 	/// @dev This function will not remove it completely but will reset the values to 0 and will set status to deleted
 	/// @param _backlogId Backlog-id for which you want to delete the details
 	function deleteBacklog(uint256 _backlogId) 
+	onlyOwner
 	ifBacklogExisted(_backlogId)
 	public
 	{
 		require(_backlogId != 0);
+		require(backlogId2backlogDetails[_backlogId].statusValue != 5);		// 5: closed
 
 		uint256 tokenAmt = backlogId2backlogDetails[_backlogId].totalTokens;
-		totalTokensReserved = totalTokensReserved.sub(tokenAmt);						// release reserved tokens and update the total balance of current balance
-
-		backlogId2backlogDetails[_backlogId].totalTokens = 0;							// set total tokens = 0
-		// backlogId2backlogDetails[_backlogId].totalVoters = 0;						// check if this can be a case?
-		backlogId2backlogDetails[_backlogId].statusValue = 5;							// set status = -1
-
-		// emit successful deletion of backlog
+		// release reserved tokens
+		totalTokensReserved = totalTokensReserved.sub(tokenAmt);
+		// update backlog details
+		backlogId2backlogDetails[_backlogId].totalTokens = 0;
+		backlogId2backlogDetails[_backlogId].totalVoters = 0;
+		backlogId2backlogDetails[_backlogId].statusValue = 6;	//6: deleted
+		SuccessfulDeletionOfBacklog(_backlogId);
 	}
 
 
-	// Suggestions: function to keep track of price winners
-	// for that mapping will be there and this method will be called (and will throw an event) whenever transactions are made to winners and reviewers
-	
-		// check if there are three winners or not
-		// QUERY: what will happen to the coins reserved for second and third place. If there is only one submission for a particular backlog
-		// transferToWinner(firstWinnerAddress, firstWinnerFund)
-		// transferToWinner(secondWinnerAddress, secondWinnerFund)
-		// transferToWinner(thirdWinnerAddress, thirdWinnerFund)
-		// transferToReviewers([]reviewersAddress)
-		// status = 3 close
+	/// @notice Function to update an existing backlog
+	/// @param _backlogId Backlod ID
+	/// @param _tokens New amount of tokens to be reserved for given backlog id 
+	function updateBacklogAmount(uint256 _backlogId, uint256 _tokens) 
+	onlyOwner
+	ifBacklogExisted(_backlogId)		
+	public
+	{
+		require(_backlogId != 0);
+		require(_tokens != 0);
+		require(backlogId2backlogDetails[_backlogId].statusValue >= 0);
+		require(backlogId2backlogDetails[_backlogId].statusValue < 2);	// allow status == 0 (not started); status == 1 (submission period)
+		require(backlogId2backlogDetails[_backlogId].totalVoters == 0);
 
-	function releaseTokensForCompleteBacklog(uint256 _backlogId,
+		uint256 newTokens      = 0;
+		uint256 newTotalTokens = 0; 
+		backlogDetails backlogId = backlogId2backlogDetails[_backlogId];
+		uint256 tokens = backlogId.totalTokens;
+		// to subtract the previous token value from total
+		totalTokensReserved = totalTokensReserved.sub(tokens);		
+		if(tokens < _tokens) {
+				newTokens = _tokens.sub(tokens);
+		} else {
+			    newTokens = tokens.sub(_tokens);
+		}
+		newTotalTokens = tokens.add(newTokens);
+		// update backlog details
+		backlogId.totalTokens = newTotalTokens;
+		// to add the new calculated tokens to be reserved to total
+		totalTokensReserved = totalTokensReserved.add(newTotalTokens);
+		SuccessfulUpdateOfBacklog(_backlogId, _tokens);
+	}
+
+
+	/// @notice Function to release tokens to winners for complete backlog
+	/// @param _backlogId Backlog-ID
+	/// @param _firstWinner Address of first winner
+	/// @param _secondWinner Address of second winner
+	/// @param _thirdWinner Address of third winner
+	/// @param _totalVoters Number of total voters
+	function releaseTokensToWinnersForCompleteBacklog(uint256 _backlogId,
 	    address _firstWinner, 
 		address _secondWinner, 
 		address _thirdWinner,
 		uint256 _totalVoters)	
-	ifBacklogExisted(_backlogId)		
+	onlyOwner
+	ifBacklogExisted(_backlogId)	
 	public 
 	{
-
-        	// TODO: check if status is 2   // require(backlogId2backlogDetails[_backlogId].statusValue == 2);
-
-			// TODO: will update mapping values as well
-
+			require(_backlogId != 0);
+			require(_firstWinner != 0);
+			require(_secondWinner != 0);
+			require(_thirdWinner != 0);
+			require(_totalVoters != 0);
+			require(backlogId2backlogDetails[_backlogId].totalTokens <= totalTokensReserved);		
+        	require(backlogId2backlogDetails[_backlogId].statusValue == 4);		// 4: voting ended
+			require(backlogId2backlogDetails[_backlogId].totalVoters != 0); 			
+			require(backlogId2backlogDetails[_backlogId].tokensPerVoter != 0); 			
+			
 			uint256 tokensForDevelopers;
 			uint256 tokensForVoters;
-
 			uint256 tokensForFirstWinner;
 			uint256 tokensForSecondWinner;
 			uint256 tokensForThirdWinner;
-
-			uint256 backlogTokenAmount = backlogId2backlogDetails[_backlogId].totalTokens;
-
-			// CHECK: require(backlogTokenAmount >= totalTokensReserved);		
-
-			(tokensForDevelopers, tokensForVoters) = calculateFunds(backlogTokenAmount);
+			(tokensForDevelopers, tokensForVoters) = calculateFunds(backlogId2backlogDetails[_backlogId].totalTokens);
 			(tokensForFirstWinner, tokensForSecondWinner, tokensForThirdWinner) = calculateWinnerFunds(tokensForDevelopers);
-			
-			// TODO: TBD: revert if (totalVoters == 0) and (tokensPerVoter != 0)
 			backlogId2backlogDetails[_backlogId].tokensPerVoter = calculateVoterFunds(tokensForVoters, _totalVoters);
-
+			// transfer funds
 			aegisCoin.transfer(_firstWinner, tokensForFirstWinner);
 			aegisCoin.transfer(_secondWinner, tokensForSecondWinner);
 			aegisCoin.transfer(_thirdWinner, tokensForThirdWinner);
-
-			// update mapping 
-			// update reservedTokens value 
-			// update status
-			// update paid status 
+			// update reserved tokens
+            totalTokensReserved = totalTokensReserved.sub(tokensForFirstWinner.add(tokensForSecondWinner.add(tokensForThirdWinner)));
+            SuccessfulTokensTransferToWinners(_backlogId); 
 	} 
 
 
@@ -282,16 +311,23 @@ contract DevelopmentAcc is Ownable {
 	ifBacklogExisted(_backlogId)
 	public
 	{
-			require (_voters.length <= 20);
-			// TODO:  will check if status is 2
+			require(_backlogId != 0);
+			require(_voters.length <= 20);
+			require(backlogId2backlogDetails[_backlogId].statusValue == 4); 
 
 			address[] memory voters = _voters;
 			uint256 tokens = backlogId2backlogDetails[_backlogId].tokensPerVoter;
-
+			// transfer to voters
 			for(uint i=0; i < voters.length; i++) {
 					aegisCoin.transfer(voters[i], tokens);
 			}
+			// update reserved tokens
+			totalTokensReserved = totalTokensReserved.add(tokens.mul(voters.length));
+			//update status to successfully paid and now closed
+			backlogId2backlogDetails[_backlogId].statusValue == 5;
+			SuccessfulTokensTransferToVoters(_backlogId); 		// TBD: update status - voters are paid
 	}
+
 
  /* **************************************************************************************************************************
   *	Private Methods
@@ -304,7 +340,7 @@ contract DevelopmentAcc is Ownable {
 	private 
 	{
 			developersFundPercentage = _devPercentage;
-			votersFundPercentage = _voterPercentage;
+			votersFundPercentage     = _voterPercentage;
 	}
 
 
@@ -317,9 +353,9 @@ contract DevelopmentAcc is Ownable {
 	    uint256 _thirdWinnerPer) 
 	private 
 	{
-			firstWinnerPercentage = _firstWinnerPer;
+			firstWinnerPercentage  = _firstWinnerPer;
 			secondWinnerPercentage = _secondWinnerPer;
-			thirdWinnerPercentage = _thirdWinnerPer;
+			thirdWinnerPercentage  = _thirdWinnerPer;
 	}
 
 
@@ -331,7 +367,7 @@ contract DevelopmentAcc is Ownable {
 	private
 	returns (uint256 _tokensForDev, uint256 _tokensForVoters) 
 	{
-			_tokensForDev = (_backlogAmount.mul(developersFundPercentage)).div(100);
+			_tokensForDev    = (_backlogAmount.mul(developersFundPercentage)).div(100);
 			_tokensForVoters = (_backlogAmount.mul(votersFundPercentage)).div(100);
 			return;
 	}
@@ -345,9 +381,9 @@ contract DevelopmentAcc is Ownable {
 	private
 	returns (uint256 _tokensForFirstWinner, uint256 _tokensForSecondWinner, uint256 _tokensForThirdWinner)
 	{
-			_tokensForFirstWinner = (_backlogAmountForDevelopers.mul(firstWinnerPercentage)).div(100);
+			_tokensForFirstWinner  = (_backlogAmountForDevelopers.mul(firstWinnerPercentage)).div(100);
 			_tokensForSecondWinner = (_backlogAmountForDevelopers.mul(secondWinnerPercentage)).div(100);
-			_tokensForThirdWinner = (_backlogAmountForDevelopers.mul(thirdWinnerPercentage)).div(100);
+			_tokensForThirdWinner  = (_backlogAmountForDevelopers.mul(thirdWinnerPercentage)).div(100);
 			return;
 	}
 
@@ -380,6 +416,22 @@ contract DevelopmentAcc is Ownable {
   		return value;
   	}
 
+
+	// /// @notice Function to check if given backlog id has status 0
+	// /// @param _backlogId Backlog ID
+	// /// @return Bool value checking for status 0 of given backlog id
+ //  	function checkStatus(uint256 _backlogId) 
+ //  	private
+ //  	returns (bool)
+ //  	{
+ //        bool value = false;
+ //        if (backlogId2backlogDetails[_backlogId].statusValue == 0) {
+ //        	value = true;
+ //        }
+ //        return value;
+ //  	}
+
+
  /* **************************************************************************************************************************
   *	Getter Methods
   */
@@ -395,7 +447,7 @@ contract DevelopmentAcc is Ownable {
 	}
 
 
-	/// @notice Function to fetch backlog details for a given backlog id
+	/// @notice Function to fetch backlog details for a given backlog Id
 	/// @param _backlogId Backlog-Id for which details are required
 	/// @return total tokens reserved for this backlog
 	/// @return total voters count who voted for this backlog
@@ -424,8 +476,8 @@ contract DevelopmentAcc is Ownable {
     /// @return Developers Fund Percentage
     /// @return Voters Fund Percentage
     function getDeveloperAndVoterPercentage()
-    public
     view
+    public
     returns (uint256, uint256)
     {
     		return(developersFundPercentage, votersFundPercentage); 
@@ -437,13 +489,35 @@ contract DevelopmentAcc is Ownable {
  	/// @return Percentage set for second winner
  	/// @return Percentage set for third winner
  	function getWinnersPercentage()
- 	public
  	view
+ 	public
  	returns(uint256, uint256, uint256)
  	{
  			return(firstWinnerPercentage, secondWinnerPercentage, thirdWinnerPercentage); 
     }
 
+    function getBacklogStatus(uint256 _backlogId)
+	view
+	public
+	returns (uint256)
+	{
+			return backlogId2backlogDetails[_backlogId].statusValue;
+	}
+
+	// TODO: function to get remainingTokensForBacklog
+
+    function getRemainingTokensForBacklog()
+	view
+	public
+	returns (uint256)
+	{
+			return remainingTokensForBacklog;
+	}
+
     // Our service to check if gas is exhausted or not. There should be enough ethers to execute all the method calls that are inline.
     // TODO: Reggresive testing for gas exhaustion
 }
+
+// function to check if winners are paid or not
+// function to check if voters are paid or not
+// function to check which backlogs have pending transactions to voters
