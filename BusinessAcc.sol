@@ -3,7 +3,7 @@ pragma solidity ^0.4.24;
 import "./contracts/ownership/Ownable.sol";
 import "./AegisEconomyCoin.sol";
 
-contract BusinessAcc is Ownable{
+contract BusinessAcc is Ownable {
 
  	AegisEconomyCoin public aegisCoin;
 
@@ -19,16 +19,6 @@ contract BusinessAcc is Ownable{
 	{
 			require(_address != address(0));
 			aegisCoin = _address;
-			aegisCoin.setBusinessAcc(address(this));	
-	}	
-
-
-	/// @notice Function to set business funds to any address
-	function setBusinessAccountForAegisCoin() 
-	onlyOwner
-	public
-	{
-			aegisCoin.setBusinessAcc(address(this));
 	}
 
 
@@ -43,39 +33,16 @@ contract BusinessAcc is Ownable{
 	}
 
 
-	// NO MORE REQUIRED
-	// // TODO: function set approval that will be called by api every time funds are received so that
-	// //       admin can make transferFrom calls easily
-	// function setApprovalForFunds()
-	// public
-	// {
-	//         uint256 currentTokenBalance = aegisCoin.balanceOf(address(this));
-	// 		aegisCoin.approve(address(aegisCoin), currentTokenBalance);
-	// }
-
-
 	// ========================= Getter Methods ===============================
 
-
-	/// @notice Function to fetch the current token balance
-	/// @return _currentTokenBalance of business contract
-    function getContractBalance() 
+    function getAegisCoinAddress() 
     public 
     view 
-    returns (uint256 _currentTokenBalance) 
+    returns (address) 
     {
-	        _currentTokenBalance = aegisCoin.balanceOf(address(this));
-	        return;
+	        return aegisCoin;
     }
 
 
-    // function getAllowance(address _owner, address _spender) 
-    // public 
-    // view 
-    // returns (uint256) 
-    // {
-	   //      return aegisCoin.allowance(_owner, _spender);
-    // }
-
-    // TODO: Maintain History
+    // TODO: change owner address!
 }
