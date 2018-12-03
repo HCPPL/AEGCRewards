@@ -70,7 +70,7 @@ contract DevelopmentAcc is Ownable {
 		uint256 _secondWinnerPer, 
 		uint256 _thirdWinnerPer) 
 	{
-		// TODO: address should be of type contract address
+		// Pending: check for : address should be of type contract address
 
 			require(_address != address(0));
 			require(_devPercentage != 0);
@@ -105,55 +105,6 @@ contract DevelopmentAcc is Ownable {
 	{
 			remainingTokensForBacklog = remainingTokensForBacklog.add(_tokens);
 	}
-
-
-	/// @notice Wrapper Function to update distributive percentage figures for developers and voters
-	/// @param _devPercentage Percentage value for developers
-	/// @param _voterPercentage Percentage value for voters
-	function updateDeveloperVoterPercentage(uint256 _devPercentage, uint256 _voterPercentage) 
-	public 
-	{
-			require (_devPercentage != 0);
-			require (_voterPercentage != 0);
-        	require (_devPercentage.add(_voterPercentage) == 100); 		
-			setDeveloperVoterPercentage(_devPercentage, _voterPercentage);
-	}
-
-
-	/// @notice Function to update distributive percentage figures for first, second and third winners
-	/// @param _firstWinnerPer Percentage value for first winner
-	/// @param _secondWinnerPer Percentage value for second winner
-	/// @param _thirdWinnerPer Percentage value for third winner
-	function updateWinnersPercentage(uint256 _firstWinnerPer,
-	    uint256 _secondWinnerPer,
-	    uint256 _thirdWinnerPer) 
-	public 
-	{
-			require (_firstWinnerPer != 0);
-			require (_secondWinnerPer != 0);
-			require (_thirdWinnerPer != 0);
-            require ( _firstWinnerPer.add(_secondWinnerPer.add(_thirdWinnerPer)) == 100); 
-			setWinnersPercentage(_firstWinnerPer, _secondWinnerPer, _thirdWinnerPer);
-	}
-
-
-	/// @notice Function to update the status value for given backlog-id
-	/// @param _backlogId Backlog ID
-	/// @param _statusValue Status Value in uint256
-	/// @return Return with bool value as true if update is a success else otherwise
-	function setBacklogStatus(uint256 _backlogId, uint256 _statusValue) 
-	onlyOwner
-	public
-	returns (bool)
-	{
-			require(_backlogId != 0);
-			require(backlogId2backlogDetails[_backlogId].statusValue != 5); // can't set status to 3 i.e. payment done
-			require(backlogId2backlogDetails[_backlogId].statusValue >= 0); // 0 <= status value <= 6
-			require(backlogId2backlogDetails[_backlogId].statusValue <= 6); // 0 <= status value <= 6
-			backlogId2backlogDetails[_backlogId].statusValue = _statusValue;
-			return true;
-	}
-
 
     /* ***************************************************************************************
     		Status Value: 
@@ -196,6 +147,7 @@ contract DevelopmentAcc is Ownable {
 		backlogId.totalTokens = _tokens;
 		backlogId.totalVoters = 0;
 		backlogId.statusValue = 0;
+		backlogId.tokensPerVoter = 0;
 		backlogIds.push(_backlogId)-1;
 		// set reserved value and other variables here
 		totalTokensReserved = totalTokensReserved.add(_tokens);
@@ -218,6 +170,7 @@ contract DevelopmentAcc is Ownable {
 		uint256 tokenAmt = backlogId2backlogDetails[_backlogId].totalTokens;
 		// release reserved tokens
 		totalTokensReserved = totalTokensReserved.sub(tokenAmt);
+		remainingTokensForBacklog = remainingTokensForBacklog.add(tokenAmt);
 		// update backlog details
 		backlogId2backlogDetails[_backlogId].totalTokens = 0;
 		backlogId2backlogDetails[_backlogId].totalVoters = 0;
@@ -238,14 +191,15 @@ contract DevelopmentAcc is Ownable {
 		require(_tokens != 0);
 		require(backlogId2backlogDetails[_backlogId].statusValue >= 0);
 		require(backlogId2backlogDetails[_backlogId].statusValue < 2);	// allow status == 0 (not started); status == 1 (submission period)
-		require(backlogId2backlogDetails[_backlogId].totalVoters == 0);
+		require(backlogId2backlogDetails[_backlogId].totalVoters == 0);	// TBD: probably not required as when in submission state; total voters will be 0
 
 		uint256 newTokens      = 0;
 		uint256 newTotalTokens = 0; 
 		backlogDetails backlogId = backlogId2backlogDetails[_backlogId];
 		uint256 tokens = backlogId.totalTokens;
 		// to subtract the previous token value from total
-		totalTokensReserved = totalTokensReserved.sub(tokens);		
+		totalTokensReserved = totalTokensReserved.sub(tokens);
+		remainingTokensForBacklog = remainingTokensForBacklog.add(tokens);		
 		if(tokens < _tokens) {
 				newTokens = _tokens.sub(tokens);
 		} else {
@@ -256,6 +210,7 @@ contract DevelopmentAcc is Ownable {
 		backlogId.totalTokens = newTotalTokens;
 		// to add the new calculated tokens to be reserved to total
 		totalTokensReserved = totalTokensReserved.add(newTotalTokens);
+		remainingTokensForBacklog = remainingTokensForBacklog.sub(newTotalTokens);
 		SuccessfulUpdateOfBacklog(_backlogId, _tokens);
 	}
 
@@ -280,10 +235,10 @@ contract DevelopmentAcc is Ownable {
 			require(_secondWinner != 0);
 			require(_thirdWinner != 0);
 			require(_totalVoters != 0);
-			require(backlogId2backlogDetails[_backlogId].totalTokens <= totalTokensReserved);		
-        	require(backlogId2backlogDetails[_backlogId].statusValue == 4);		// 4: voting ended
-			require(backlogId2backlogDetails[_backlogId].totalVoters != 0); 			
-			require(backlogId2backlogDetails[_backlogId].tokensPerVoter != 0); 			
+			require(backlogId2backlogDetails[_backlogId].totalTokens <= totalTokensReserved);
+			require(backlogId2backlogDetails[_backlogId].statusValue == 4);		// 4: voting ended
+			require(backlogId2backlogDetails[_backlogId].totalVoters == 0); 			
+			require(backlogId2backlogDetails[_backlogId].tokensPerVoter == 0); 			
 			
 			uint256 tokensForDevelopers;
 			uint256 tokensForVoters;
@@ -312,6 +267,7 @@ contract DevelopmentAcc is Ownable {
 	public
 	{
 			require(_backlogId != 0);
+			require (_voters.length != 0);
 			require(_voters.length <= 20);
 			require(backlogId2backlogDetails[_backlogId].statusValue == 4); 
 
@@ -322,10 +278,99 @@ contract DevelopmentAcc is Ownable {
 					aegisCoin.transfer(voters[i], tokens);
 			}
 			// update reserved tokens
-			totalTokensReserved = totalTokensReserved.add(tokens.mul(voters.length));
+			totalTokensReserved = totalTokensReserved.sub(tokens.mul(voters.length));
 			//update status to successfully paid and now closed
-			backlogId2backlogDetails[_backlogId].statusValue == 5;
-			SuccessfulTokensTransferToVoters(_backlogId); 		// TBD: update status - voters are paid
+			backlogId2backlogDetails[_backlogId].statusValue = 5;
+			SuccessfulTokensTransferToVoters(_backlogId); 
+	}
+
+
+	/// @notice Wrapper Function to update distributive percentage figures for developers and voters
+	/// @param _devPercentage Percentage value for developers
+	/// @param _voterPercentage Percentage value for voters
+	function updateDeveloperVoterPercentage(uint256 _devPercentage, uint256 _voterPercentage) 
+	onlyOwner
+	public 
+	{
+			require (_devPercentage != 0);
+			require (_voterPercentage != 0);
+        	require (_devPercentage.add(_voterPercentage) == 100); 		
+			setDeveloperVoterPercentage(_devPercentage, _voterPercentage);
+	}
+
+
+	/// @notice Function to update distributive percentage figures for first, second and third winners
+	/// @param _firstWinnerPer Percentage value for first winner
+	/// @param _secondWinnerPer Percentage value for second winner
+	/// @param _thirdWinnerPer Percentage value for third winner
+	function updateWinnersPercentage(uint256 _firstWinnerPer,
+	    uint256 _secondWinnerPer,
+	    uint256 _thirdWinnerPer) 
+	onlyOwner
+	public 
+	{
+			require (_firstWinnerPer != 0);
+			require (_secondWinnerPer != 0);
+			require (_thirdWinnerPer != 0);
+            require ( _firstWinnerPer.add(_secondWinnerPer.add(_thirdWinnerPer)) == 100); 
+			setWinnersPercentage(_firstWinnerPer, _secondWinnerPer, _thirdWinnerPer);
+	}
+
+
+	/// @notice Function to update the status value for given backlog-id
+	/// @param _backlogId Backlog ID
+	/// @param _statusValue Status Value in uint256
+	/// @return Return with bool value as true if update is a success else otherwise
+	function setBacklogStatus(uint256 _backlogId, uint256 _statusValue) 
+	onlyOwner
+	ifBacklogExisted(_backlogId)
+	public
+	// returns (bool)
+	{
+			require(_backlogId != 0);
+			require(_statusValue != 5);
+			require(_statusValue >= 0);
+			require(_statusValue <= 6);
+
+
+			// *** TBD ***
+
+			// not started (0) 
+			// 		cannot be set to submission ended(2), voting start(3), end(4), close(5)
+			//		can be set to deleted(6), submission started (1)
+
+			// started (1)
+			// 		cannot be set to not started (0), voting started(3), voting ended (4), close(5)
+			//		can be set to deleted (6), submission ended (2)
+
+
+			// submission ended (2)
+			// 		cannot be set to not started (0), voting ended (4), close(5)
+			//		can be set to deleted (6), voting started(3)
+
+
+			// voting started (3)
+			// 		cannot be set to not started (0), started (1), ended (2), close(5)
+			//		can be set to deleted (6), voting ended (4)
+
+
+			// voting ended (4)
+			// 		cannot be set to not started (0), started (1), ended (2), voting started(3), close(5)
+			//		can be set to deleted (6) - tbd
+
+
+			// closed (5)
+			// 		cannot be set to any
+
+
+			// deleted (6)
+			// 		cannot be set to any
+
+			require(backlogId2backlogDetails[_backlogId].statusValue != 5); // can't set status to any if successfully paid
+			require(backlogId2backlogDetails[_backlogId].statusValue >= 0); // 0 <= status value <= 6
+			require(backlogId2backlogDetails[_backlogId].statusValue <= 6); // 0 <= status value <= 6
+			backlogId2backlogDetails[_backlogId].statusValue = _statusValue;
+			// return true;
 	}
 
 
@@ -417,21 +462,6 @@ contract DevelopmentAcc is Ownable {
   	}
 
 
-	// /// @notice Function to check if given backlog id has status 0
-	// /// @param _backlogId Backlog ID
-	// /// @return Bool value checking for status 0 of given backlog id
- //  	function checkStatus(uint256 _backlogId) 
- //  	private
- //  	returns (bool)
- //  	{
- //        bool value = false;
- //        if (backlogId2backlogDetails[_backlogId].statusValue == 0) {
- //        	value = true;
- //        }
- //        return value;
- //  	}
-
-
  /* **************************************************************************************************************************
   *	Getter Methods
   */
@@ -452,12 +482,12 @@ contract DevelopmentAcc is Ownable {
 	/// @return total tokens reserved for this backlog
 	/// @return total voters count who voted for this backlog
 	/// @return current status of the backlog
-	function getBacklogID(uint256 _backlogId) 
+	function getBacklogIDDetails(uint256 _backlogId) 
 	view
 	public 
-	returns (uint256, uint256, uint256) 
+	returns (uint256, uint256, uint256, uint256) 
 	{
-    	    return (backlogId2backlogDetails[_backlogId].totalTokens, backlogId2backlogDetails[_backlogId].totalVoters, backlogId2backlogDetails[_backlogId].statusValue);
+    	    return (backlogId2backlogDetails[_backlogId].totalTokens, backlogId2backlogDetails[_backlogId].totalVoters, backlogId2backlogDetails[_backlogId].statusValue, backlogId2backlogDetails[_backlogId].tokensPerVoter);
     }
 
 
@@ -504,9 +534,24 @@ contract DevelopmentAcc is Ownable {
 			return backlogId2backlogDetails[_backlogId].statusValue;
 	}
 
-	// TODO: function to get remainingTokensForBacklog
+	function getAegisCoinContractAddress()
+	view
+	public
+	returns (address)
+	{
+			return aegisCoin;
+	}
 
-    function getRemainingTokensForBacklog()
+	function getTotalReservedTokens()
+	view
+	public
+	returns (uint256)
+	{
+			return totalTokensReserved;
+	}
+
+
+    function getRemainingTokens()
 	view
 	public
 	returns (uint256)
@@ -514,10 +559,26 @@ contract DevelopmentAcc is Ownable {
 			return remainingTokensForBacklog;
 	}
 
+
+	function getBoolForBacklogExistence(uint256 _backlogId)
+  	view
+  	public
+  	returns (bool)
+  	{
+  		bool value = false;
+  		for(uint i=0; i<backlogIds.length; i++) {
+  			if(backlogIds[i] == _backlogId) {
+  				value = true;
+  			}
+  		}
+  		return value;
+  	}
+
     // Our service to check if gas is exhausted or not. There should be enough ethers to execute all the method calls that are inline.
     // TODO: Reggresive testing for gas exhaustion
 }
 
+// TBD
 // function to check if winners are paid or not
 // function to check if voters are paid or not
 // function to check which backlogs have pending transactions to voters
