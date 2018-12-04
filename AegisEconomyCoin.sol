@@ -20,13 +20,13 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     uint256 private constant    initialSupply =  50*(10**6)* (10**18);    // 50 million Tokens
     uint256 private             supplyPerDay;
 
-    uint256 private             inflationPeriodStart;
-    uint256 private             oneYearComplete;
-    uint256 private             secondYearComplete;
+    uint256 private             inflationYearOneStart;
+    uint256 private             inflationYearTwoStart;
+    uint256 private             inflationYearThreeStart;
     uint256 private             thirdYearComplete;
-    uint256 private constant    inflationRateAfterOneYear = 1500;        // 15%         // TODO: Look if this is can be avoided
-    uint256 private constant    inflationRateAfterTwoYears = 1250;       // 12.5%
-    uint256 private constant    inflationRateAfterThreeYears = 1000;     // 10%
+    uint256 private constant    inflationRateAfterOneYear = 1500;         // 15%         // TODO: Look if this can be avoided
+    uint256 private constant    inflationRateAfterTwoYears = 1250;        // 12.5%
+    uint256 private constant    inflationRateAfterThreeYears = 1000;      // 10%
     uint256 private constant    totalDaysInNonLeapYear = 365 days;
     
     uint256 private             releasedTokens;
@@ -36,6 +36,7 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     BusinessAcc    private       businessContract;           
     DevelopmentAcc private       developmentContract;     
 
+    // TODO: Change owner address
     // TBD: add pausable feature???
     // TODO: Coin Minted HISTORY in coming phase
     
@@ -54,25 +55,24 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
             balances[msg.sender]      = initialSupply;
             totalSupply_              = initialSupply;
             supplyPerDay              = totalSupply_.div(365);
-            inflationPeriodStart      = now;
-            oneYearComplete           = inflationPeriodStart.add(totalDaysInNonLeapYear); 
-            secondYearComplete        = oneYearComplete.add(totalDaysInNonLeapYear);
-            thirdYearComplete         = secondYearComplete.add(totalDaysInNonLeapYear);
+            inflationYearOneStart     = now;
+            inflationYearTwoStart     = inflationYearOneStart.add(totalDaysInNonLeapYear); 
+            inflationYearThreeStart   = inflationYearTwoStart.add(totalDaysInNonLeapYear);
             percentageForDevelopment  = _percentageForDevelopment; 
             percentageForBusiness     = _percentageForBusiness;
     }
 
 
     /// @notice Function to mint new tokens and divide them between development and business contract
-    function mintTokens(uint _timeLap)                                            // IMPORTANT!! remove parameter!
+    function mintTokens(uint _timeLap)                                 // IMPORTANT!! remove parameter!
     onlyOwner
     public 
     { 
             uint256 amount = 0;
             uint256 currentTime = now.add(_timeLap);                              // IMPORTANT!! remove .add(_timeLap)
-            if (currentTime >= inflationPeriodStart) {                                            
-                if (currentTime > oneYearComplete) {                                            
-                    if (currentTime > secondYearComplete) {                                     
+            if (currentTime >= inflationYearOneStart) {                                            
+                if (currentTime > inflationYearTwoStart) {                                            
+                    if (currentTime > inflationYearThreeStart) {                                     
                         amount = (supplyPerDay.mul(inflationRateAfterThreeYears)).div(10000);   // 2 - 3 year and onwards
                     } else {                                                                    
                         amount = (supplyPerDay.mul(inflationRateAfterTwoYears)).div(10000);     // 1 - 2 year
@@ -85,7 +85,7 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
             }
             require (amount != 0);
             mint(owner, amount);
-            supplyPerDay = totalSupply_.div(365);                        
+            supplyPerDay = totalSupply_.div(365);
             creditContracts();
     }
 
@@ -114,39 +114,9 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     {
             require (developmentContract == address(0));  
             require(_address != address(0));
-            require(DevelopmentAcc(_address) == _address);
+            require(DevelopmentAcc(_address) == _address);      // doesn't work
 
             developmentContract = _address;
-    }
-
-
-    /// @notice Private function which transfer tokens into development and business contracts
-    function creditContracts() 
-    private 
-    {
-            uint256 tokensForDev;
-            uint256 tokensForBusi;
-
-            (tokensForDev, tokensForBusi) = calculateTokens(percentageForDevelopment, percentageForBusiness);
-            
-            transfer(businessContract, tokensForDev);
-            transfer(developmentContract, tokensForBusi);
-            developmentContract.creditRemainingTokens(tokensForDev);
-    }
-
-
-    /// @notice Function to convert percentage into number of tokens before transfering
-    /// @param _percentageForDevelopment Percentage value of tokens for Development Contract
-    /// @param _percentageForBusiness Percentage value of tokens for Business Contract
-    /// @return _tokensForDev Number of tokens for development contract
-    /// @return _tokensForBusi Number of tokens for business contract
-    function calculateTokens(uint256 _percentageForDevelopment, uint256 _percentageForBusiness) 
-    private
-    returns(uint256 _tokensForDev, uint256 _tokensForBusi)
-    {
-            _tokensForDev = (supplyPerDay.mul(_percentageForDevelopment)).div(100);
-            _tokensForBusi = (supplyPerDay.mul(_percentageForBusiness)).div(100);
-            return;
     }
    
 
@@ -199,17 +169,40 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
     }
 
 
+    // ==============================================================================================
+    // Private Methods
+
+    /// @notice Private function which transfer tokens into development and business contracts
+    function creditContracts() 
+    private 
+    {
+            uint256 tokensForDev;
+            uint256 tokensForBusi;
+
+            (tokensForDev, tokensForBusi) = calculateTokens(percentageForDevelopment, percentageForBusiness);
+            
+            transfer(businessContract, tokensForDev);
+            transfer(developmentContract, tokensForBusi);
+            developmentContract.creditRemainingTokens(tokensForDev);
+    }
+
+
+    /// @notice Function to convert percentage into number of tokens before transfering
+    /// @param _percentageForDevelopment Percentage value of tokens for Development Contract
+    /// @param _percentageForBusiness Percentage value of tokens for Business Contract
+    /// @return _tokensForDev Number of tokens for development contract
+    /// @return _tokensForBusi Number of tokens for business contract
+    function calculateTokens(uint256 _percentageForDevelopment, uint256 _percentageForBusiness) 
+    private
+    returns(uint256 _tokensForDev, uint256 _tokensForBusi)
+    {
+            _tokensForDev = (supplyPerDay.mul(_percentageForDevelopment)).div(100);
+            _tokensForBusi = (supplyPerDay.mul(_percentageForBusiness)).div(100);
+            return;
+    }
+
     // ============================== Getter Methods ==============================================
 
-    /// @notice Function to fetch inflation rates 
-    /// @return Inflation Rates that is set for 1st year, 2nd year and 3rd year onwards
-    function getInflationRates() 
-    public 
-    view 
-    returns(uint256, uint256, uint256) 
-    {
-            return (inflationRateAfterOneYear, inflationRateAfterTwoYears, inflationRateAfterThreeYears);      
-    }
 
     /// @notice Function to fetch current contract address 
     /// @return aegisEconomyCoin contract address
@@ -253,81 +246,32 @@ contract AegisEconomyCoin is StandardToken, Ownable, MintableToken {
             return supplyPerDay;
     }
 
-
-    /// @notice Function to fetch balance of Development contract 
-    /// @return _balance Amount of tokens available in development contract 
-    function getDevelopmentAccBalance() 
+    /// @notice Function to fetch percentage that is set for Development and Business purpose
+    /// @return percentage value that is set
+    function getPercentageForDevelopmentAndBusiness() 
     public 
     view 
-    returns (uint256 _balance) 
+    returns (uint, uint) 
     {
-            _balance = balanceOf(address(developmentContract));
-            return; 
+            return (percentageForDevelopment, percentageForBusiness);
     }
 
 
-    /// @notice Wrapper function to fetch balance of Business contract 
-    /// @return _balance Amount of tokens available in business contract 
-    function getBusinessAccBalance() 
-    public 
-    view 
-    returns (uint256 _balance) 
-    {
-            _balance = balanceOf(address(businessContract));
-            return;
-    }
-
-
-    function getDeveloperVoterPercentage()
+    function getOwner()
     public
     view
-    returns (uint256 _developer, uint256 _voter)
+    returns (address)
     {
-            (_developer, _voter) = developmentContract.getDeveloperAndVoterPercentage();
-            return;
+            return owner;
     }
 
 
-    function getWinnerPercentage()
+    function getInflationPeriodInDays() 
     public
     view
-    returns(uint256 _firstWinner, uint256 _secondWinner, uint256 _thirdWinner)
+    returns (uint256, uint256, uint256)
     {
-            (_firstWinner, _secondWinner, _thirdWinner) = developmentContract.getWinnersPercentage();
-            return;
-    }
-
-
-    // /// @notice Function to fetch amount of tokens sold 
-    // /// @return Amount of tokens sold
-    // function getTotalTokensReleased() 
-    // public 
-    // view 
-    // returns (uint256) 
-    // {
-    //     return releasedTokens;
-    // }
-
-
-    /// @notice Function to fetch percentage that is set for Development purpose
-    /// @return percentage value that is set
-    function getPercentageForDevelopment() 
-    public 
-    view 
-    returns (uint) 
-    {
-            return percentageForDevelopment;
-    }
-
-
-    /// @notice Function to fetch percentage that is set for Business purpose
-    /// @return percentage value that is set
-    function getPercentageForBusiness() 
-    public 
-    view 
-    returns (uint) 
-    {
-            return percentageForBusiness;
+            return (inflationYearOneStart, inflationYearTwoStart, inflationYearThreeStart);
     }
 
 }
